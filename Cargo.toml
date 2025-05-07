@@ -1,7 +1,7 @@
 [package]
 name = "embed-nu"
-version = "0.9.1"
-edition = "2021"
+version = "0.104.0"
+edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/Trivernis/embed-nu"
 description = "Embed the nu engine in your rust application"

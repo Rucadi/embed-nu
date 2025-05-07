@@ -6,9 +6,7 @@ use std::collections::HashMap;
 pub use builder::*;
 pub use command_group_config::CommandGroupConfig;
 use nu_protocol::{
-    ast::{Block, Call},
-    engine::{EngineState, Stack, StateWorkingSet},
-    PipelineData, Span,
+    ast::{Block, Call}, debugger::WithoutDebug, engine::{EngineState, Stack, StateWorkingSet}, PipelineData, Span
 };
 
 use crate::{
@@ -34,13 +32,11 @@ impl Context {
 
     /// Evaluates the given block with the current engine context (stack plus engine state)
     pub fn eval_block(&mut self, block: &Block, input: PipelineData) -> CrateResult<PipelineData> {
-        nu_engine::eval_block(
+        nu_engine::eval_block::<WithoutDebug>(
             &self.engine_state,
             &mut self.stack,
             block,
             input,
-            false,
-            false,
         )
         .map_err(CrateError::from)
     }
@@ -95,12 +91,10 @@ impl Context {
             decl_id,
             head: Span::empty(),
             arguments: args,
-            redirect_stdout: true,
-            redirect_stderr: true,
             parser_info: HashMap::new(),
         };
 
-        let data = nu_engine::eval_call(
+        let data = nu_engine::eval_call::<WithoutDebug>(
             &self.engine_state,
             &mut self.stack,
             &call,
@@ -112,14 +106,14 @@ impl Context {
 
     /// Prints the data of the given pipeline to stdout
     pub fn print_pipeline(&mut self, pipeline: PipelineData) -> CrateResult<()> {
-        pipeline.print(&self.engine_state, &mut self.stack, false, false)?;
+        pipeline.print_raw(&self.engine_state, false, false)?;
 
         Ok(())
     }
 
     /// Prints the data of the given pipeline to stderr
     pub fn print_pipeline_stderr(&mut self, pipeline: PipelineData) -> CrateResult<()> {
-        pipeline.print(&self.engine_state, &mut self.stack, false, true)?;
+        pipeline.print_raw(&self.engine_state,  false, true)?;
 
         Ok(())
     }

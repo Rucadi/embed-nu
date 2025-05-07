@@ -1,6 +1,6 @@
 use nu_protocol::{Record, Span, Value};
 use rusty_value::{Fields, HashableValue, RustyValue};
-
+use nu_utils::{SharedCow};
 use crate::utils::NewEmpty;
 
 /// A helper struct to allow IntoValue operations for nu values
@@ -86,7 +86,7 @@ impl RustyIntoValue for rusty_value::Value {
                     vals.push(val.into_value());
                 }
                 Value::Record {
-                    val: Record::from_raw_cols_vals_unchecked(cols, vals),
+                    val: SharedCow::new(Record::from_raw_cols_vals(cols, vals, Span::unknown(), Span::unknown()).unwrap()),
                     internal_span: Span::empty(),
                 }
             }
@@ -130,17 +130,27 @@ impl RustyIntoValue for rusty_value::Primitive {
 impl RustyIntoValue for rusty_value::Fields {
     fn into_value(self) -> Value {
         match self {
-            rusty_value::Fields::Named(named) => {
-                let mut cols = Vec::with_capacity(named.len());
-                let mut vals = Vec::with_capacity(named.len());
+            rusty_value::Fields::Named(map) => {
+                let mut cols = Vec::with_capacity(map.len());
+                let mut vals = Vec::with_capacity(map.len());
 
-                for (k, v) in named {
-                    cols.push(k);
-                    vals.push(v.into_value());
+                for (key, val) in map {
+                    cols.push(key);
+                    vals.push(val.into_value());
                 }
+
+                // Build the Record, then wrap in SharedCow
+                let record = Record::from_raw_cols_vals(
+                    cols,
+                    vals,
+                    Span::unknown(),
+                    Span::unknown(),
+                )
+                .unwrap();
+
                 Value::Record {
-                    val: Record::from_raw_cols_vals_unchecked(cols, vals),
-                    internal_span: Span::empty(),
+                    val: SharedCow::new(record),
+                    internal_span: Span::unknown(),
                 }
             }
             rusty_value::Fields::Unnamed(unnamed) => {

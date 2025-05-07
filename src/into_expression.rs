@@ -2,9 +2,9 @@ use nu_protocol::{
     ast::{Expr, Expression, RecordItem},
     Span, Value,
 };
-
+use nu_protocol::SpanId;
 use crate::{IntoValue, NewEmpty};
-
+use nu_protocol::ast::ListItem;
 pub trait IntoExpression {
     fn into_expression(self) -> Expression;
 }
@@ -28,6 +28,7 @@ impl ValueIntoExpression for Value {
         Expression {
             expr: self.into_expr(),
             span: Span::empty(),
+            span_id: SpanId::new(0),
             ty,
             custom_completion: None,
         }
@@ -38,25 +39,33 @@ impl ValueIntoExpression for Value {
             Value::Bool { val, .. } => Expr::Bool(val),
             Value::Int { val, .. } => Expr::Int(val),
             Value::Float { val, .. } => Expr::Float(val),
-            Value::Filesize { val, .. } => Expr::Int(val),
+            Value::Filesize { val, .. } => Expr::Int(val.get()),
             Value::Duration { val, .. } => Expr::Int(val),
             Value::Date { val, .. } => Expr::DateTime(val),
             Value::String { val, .. } => Expr::String(val),
             Value::Record { val, .. } => {
                 let entries = val
-                    .into_iter()
+                    .iter()  // Borrow the record instead of taking ownership
                     .map(|(col, val)| {
-                        RecordItem::Pair(col.into_expression(), val.into_expression())
+                        let col_expr = col.as_str().into_expression();  // Borrow col and convert
+                        let val_expr = val.clone().into_expression();  // Convert `val` into an expression, which should be a Value
+            
+                        RecordItem::Pair(col_expr, val_expr)
                     })
                     .collect();
-
+            
                 Expr::Record(entries)
             }
+            
+            
+            
             Value::List { vals, .. } => {
-                let vals = vals.into_iter().map(|v| v.into_expression()).collect();
+                let vals = vals
+                    .into_iter()
+                    .map(|v| ListItem::Item(v.into_expression()))
+                    .collect();
                 Expr::List(vals)
             }
-            Value::Block { val, .. } => Expr::Block(val),
             Value::Nothing { .. } => Expr::Nothing,
             Value::Error { error, .. } => Expr::String(error.to_string()),
             Value::Binary { val, .. } => Expr::Binary(val),

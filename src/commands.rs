@@ -1,13 +1,13 @@
 /// Copy of the nushell print command with a slight adjustment for pipelines
 /// Source: https://github.com/nushell/nushell/blob/98525043edd20abb62da09726d75816d09d68f1e/crates/nu-cli/src/print.rs
 use nu_engine::CallExt;
-use nu_protocol::ast::Call;
-use nu_protocol::engine::{Command, EngineState, Stack};
+use nu_protocol::engine::{Call, Command, EngineState, Stack};
 use nu_protocol::{
-    Category, IntoPipelineData, PipelineData, ShellError, Signature, Span, SyntaxShape, Type, Value,
+    Category, Example, PipelineData, ShellError, Signature,
+    SyntaxShape, Type, Value, IntoPipelineData,Signals
 };
 
-use crate::NewEmpty;
+
 
 #[derive(Clone)]
 pub struct PrintCommand;
@@ -15,6 +15,25 @@ pub struct PrintCommand;
 impl Command for PrintCommand {
     fn name(&self) -> &str {
         "print"
+    }
+
+    fn description(&self) -> &str {
+        "Display values to stdout without consuming them (and pass input through)"
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![
+            Example {
+                description: "Print a literal string",
+                example: "print 'Hello, world!'",
+                result: None,
+            },
+            Example {
+                description: "Print each value in a list",
+                example: "print 1 2 3",
+                result: None,
+            },
+        ]
     }
 
     fn signature(&self) -> Signature {
@@ -34,18 +53,6 @@ impl Command for PrintCommand {
             .category(Category::Strings)
     }
 
-    fn usage(&self) -> &str {
-        "Print the given values to stdout."
-    }
-
-    fn extra_usage(&self) -> &str {
-        r#"Unlike `echo`, this command does not return any value (`print | describe` will return "nothing").
-Since this command has no output, there is no point in piping it with other commands.
-`print` may be used inside blocks of code (e.g.: hooks) to display text during execution without interfering with the pipeline.
-When used inside a pipeline it passes the input forward as output without interfering with it.
-"#
-    }
-
     fn run(
         &self,
         engine_state: &EngineState,
@@ -53,27 +60,37 @@ When used inside a pipeline it passes the input forward as output without interf
         call: &Call,
         input: PipelineData,
     ) -> Result<PipelineData, ShellError> {
+        // 1) Collect explicit `print …` args
         let args: Vec<Value> = call.rest(engine_state, stack, 0)?;
         let no_newline = call.has_flag(engine_state, stack, "no-newline")?;
         let to_stderr = call.has_flag(engine_state, stack, "stderr")?;
-
-        let input_val = input.into_value(Span::empty());
-
-        // This will allow for easy printing of pipelines as well
+    
+        // 2) Turn incoming pipeline into a single Value, unwrapping the Result
+        let input_val: Value = input.into_value(call.head)?;    // <-- note the `?`
+    
+        // We'll use the call's span and an "empty" Signals instance for all our into_pipeline_data calls
+        let _span = call.head;
+        let _signals = Signals::empty();
+    
+        // 3) Print either the explicit args…
         if !args.is_empty() {
             for arg in args {
                 arg.into_pipeline_data()
-                    .print(engine_state, stack, no_newline, to_stderr)?;
+                    .print_raw(engine_state, no_newline, to_stderr)?;
             }
-        } else if !input_val.is_nothing() {
-            input_val.clone().into_pipeline_data().print(
+        }
+        // …or, if nothing was passed, print the incoming value (if it isn't "nothing")
+        else if !input_val.is_nothing() {
+            input_val.clone().into_pipeline_data().print_raw(
                 engine_state,
-                stack,
                 no_newline,
                 to_stderr,
             )?;
         }
-
+    
+        // 4) Finally, send the original input right back down the pipeline
         Ok(input_val.into_pipeline_data())
     }
+    
+    
 }

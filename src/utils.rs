@@ -17,13 +17,21 @@ impl NewEmpty for Span {
     }
 }
 
+use std::sync::Arc;
+
 pub fn parse_nu_script(engine_state: &mut EngineState, contents: String) -> CrateResult<Block> {
     let mut working_set = StateWorkingSet::new(&engine_state);
-    let block = nu_parser::parse(&mut working_set, None, &contents.into_bytes(), false);
+    let block_arc = nu_parser::parse(&mut working_set, None, &contents.into_bytes(), false);
 
     if working_set.parse_errors.is_empty() {
         let delta = working_set.render();
         engine_state.merge_delta(delta)?;
+
+        // Try to unwrap the Arc; if there's more than one ref, fall back to cloning
+        let block: Block = match Arc::try_unwrap(block_arc) {
+            Ok(inner) => inner,
+            Err(arc) => (*arc).clone(),
+        };
 
         Ok(block)
     } else {

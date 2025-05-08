@@ -283,6 +283,7 @@ pub fn bind_platform_commands(engine_state: &mut EngineState) -> CrateResult<()>
         Kill,
         Sleep,
         TermSize,
+        UName
     }
 }
 
